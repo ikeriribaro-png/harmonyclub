@@ -3,93 +3,148 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Rangos de fuerza · desde tu CSV de Hevy</title>
-  <meta name="description" content="Sube tu export de Hevy y descubre tu rango de fuerza por grupo muscular. Todo se calcula en tu navegador.">
+  <title>Symmetry · Rank Engine desde tu CSV de Hevy</title>
+  <meta name="description" content="Importa tu CSV de Hevy y descubre tu rango de fuerza por grupo muscular. Todo se calcula en tu navegador.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <header class="top">
-    <h1>Tu rango de fuerza</h1>
-    <p>Sube el CSV que exporta Hevy y mira en qué rango está cada músculo. Todo se calcula en tu navegador: el archivo no se sube a ningún servidor.</p>
+  <header class="bar">
+    <div class="bar-in">
+      <div class="brand">
+        <svg class="logo" width="36" height="36" viewBox="0 0 36 36" aria-hidden="true">
+          <rect x="1.5" y="1.5" width="33" height="33" rx="9" fill="none" stroke="#fff" stroke-width="2"/>
+          <path d="M18 8.5 26 13v10l-8 4.5L10 23V13Z" fill="none" stroke="#fff" stroke-width="2" stroke-linejoin="round"/>
+          <path d="M14 15.5c2-1.6 5-1.2 8 .6M14 20.5c3 1.8 6 2.2 8 .6" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+        <span class="brand-name">Symmetry</span>
+        <span class="pill-eng">RANK ENGINE</span>
+      </div>
+      <div class="bar-right">
+        <div class="toggle" role="group" aria-label="Vista del cuerpo">
+          <button type="button" data-view="front" aria-pressed="true">Frontal</button>
+          <button type="button" data-view="back" aria-pressed="false">Posterior</button>
+        </div>
+        <label class="btn-import" for="file">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4m0 0L7 9m5-5 5 5M4 15v4a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-4"/></svg>
+          <span>Importar CSV Hevy</span>
+        </label>
+        <input id="file" class="sr" type="file" accept=".csv,text/csv">
+      </div>
+    </div>
   </header>
 
-  <main>
-    <section class="setup" aria-label="Datos de entrada">
-      <label class="drop" id="drop" for="file">
-        <input id="file" type="file" accept=".csv,text/csv">
-        <strong id="dropTitle">Elige tu CSV de Hevy</strong>
-        <span id="dropHint">o arrástralo aquí. En Hevy: Perfil → Ajustes → Exportar datos.</span>
-      </label>
+  <main class="layout empty" id="app">
+    <!-- ===== Tarjeta tipo móvil ===== -->
+    <section class="phone" id="phone" aria-label="Mapa muscular">
+      <div class="phone-top">
+        <span class="phone-title">Symmetry</span>
+        <span class="pill-global" id="globalPill" style="--c:#3f6dff">GLOBAL: –</span>
+        <span class="pill-bw" id="bwPill">BW: 78.0 kg</span>
+      </div>
+      <ol class="gems" id="gems" aria-label="Rangos"></ol>
 
-      <div class="fields">
-        <fieldset class="seg" aria-label="Sexo">
-          <legend>Sexo</legend>
-          <input type="radio" name="sex" id="sexM" value="m" checked><label for="sexM">Hombre</label>
-          <input type="radio" name="sex" id="sexF" value="f"><label for="sexF">Mujer</label>
-        </fieldset>
+      <div class="figure">
+        <svg id="body" viewBox="0 0 240 480" role="img" aria-label="Figura humana con cada músculo coloreado según su rango"></svg>
+        <div class="co tl" id="coTL"></div>
+        <div class="co tr" id="coTR"></div>
+        <div class="co bl" id="coBL"></div>
+        <div class="co br" id="coBR"></div>
+      </div>
 
-        <div class="field">
-          <label for="bw">Peso corporal (kg)</label>
-          <input id="bw" type="number" inputmode="decimal" min="30" max="250" step="0.1" value="75">
+      <div class="phone-foot">
+        <span>Índice de Simetría Muscular: <b id="symVal">–</b></span>
+        <span class="hint">Toca cualquier músculo</span>
+      </div>
+    </section>
+
+    <!-- ===== Columna derecha ===== -->
+    <div class="col">
+      <section class="card" id="profile">
+        <div class="card-head">
+          <h2>PERFIL &amp;<br>SIMULACIÓN</h2>
+          <div class="badges" id="badges"></div>
         </div>
-
-        <div class="field">
-          <label for="period">Periodo a evaluar</label>
+        <div class="two">
+          <label class="inp"><span>Peso Corporal (kg)</span>
+            <input id="bw" type="number" inputmode="decimal" min="30" max="250" step="0.5" value="78"></label>
+          <label class="inp"><span>Estándar</span>
+            <select id="sex"><option value="m">Masculino</option><option value="f">Femenino</option></select></label>
+        </div>
+        <label class="inp wide"><span>Periodo evaluado</span>
           <select id="period">
             <option value="0">Todo el historial</option>
             <option value="365">Últimos 12 meses</option>
             <option value="180">Últimos 6 meses</option>
             <option value="90">Últimos 3 meses</option>
-          </select>
+          </select></label>
+        <p id="error" class="error" role="alert" hidden></p>
+      </section>
+
+      <section class="card welcome" id="welcome">
+        <h2>EMPIEZA AQUÍ</h2>
+        <p>Importa el CSV que exporta Hevy (<em>Perfil → Ajustes → Exportar datos</em>) o arrástralo a cualquier parte de la página. Todo se calcula en tu navegador: el archivo no se sube a ningún sitio.</p>
+        <div class="actions">
+          <label class="btn-primary" for="file">Importar CSV Hevy</label>
+          <button type="button" class="btn-ghost" id="demo">Probar con datos de ejemplo</button>
         </div>
+      </section>
 
-        <button id="demo" type="button" class="ghost">Probar con datos de ejemplo</button>
-      </div>
-      <p id="error" class="error" role="alert" hidden></p>
-    </section>
-
-    <section id="result" hidden>
-      <div class="grid">
-        <div class="stage" aria-label="Mapa muscular">
-          <div class="viewtoggle" role="group" aria-label="Vista">
-            <button type="button" data-view="front" aria-pressed="true">Frontal</button>
-            <button type="button" data-view="back" aria-pressed="false">Trasera</button>
+      <section class="card detail" id="detail" hidden aria-live="polite">
+        <div id="dBody">
+          <div class="d-top">
+            <div class="d-gem" id="dGem"></div>
+            <div class="d-main">
+              <span class="tier-pill" id="dPill"></span>
+              <h3 id="dName"></h3>
+              <div class="d-guide">Ejercicio guía: <select id="dGuide" aria-label="Ejercicio guía"></select></div>
+            </div>
+            <div class="d-e1">
+              <span class="lbl">e1RM Estimado</span>
+              <b id="dE1"></b>
+              <span class="ratio" id="dRatio"></span>
+            </div>
           </div>
-          <svg id="body" viewBox="48 0 204 540" role="img" aria-label="Figura humana con cada músculo coloreado según su rango"></svg>
+          <div class="d-progress">
+            <div class="row"><span id="dTier"></span><span class="next" id="dNext"></span></div>
+            <div class="track"><i id="dBar"></i></div>
+          </div>
+          <div class="two">
+            <label class="inp"><span id="lblW">Carga levantada (kg)</span>
+              <input id="simW" type="number" inputmode="decimal" min="0" step="0.5"></label>
+            <label class="inp"><span>Repeticiones limpias</span>
+              <input id="simR" type="number" inputmode="numeric" min="1" max="30" step="1"></label>
+          </div>
+          <p class="d-note"><span id="dNote"></span> <button type="button" class="link" id="simReset" hidden>Restablecer</button></p>
         </div>
+        <p id="dEmpty" class="d-empty" hidden></p>
+      </section>
 
-        <div class="side">
-          <div class="overall" id="overall"></div>
-          <ul class="muscles" id="muscles"></ul>
-        </div>
-      </div>
-
-      <ol class="legend" id="legend" aria-label="Rangos"></ol>
-
-      <section class="detail" id="detail" aria-live="polite"></section>
-
-      <details class="all">
-        <summary>Todos los ejercicios (<span id="exCount">0</span>)</summary>
-        <div class="tablewrap">
-          <table id="exTable">
-            <thead>
-              <tr><th>Ejercicio</th><th>Músculo</th><th>Mejor serie</th><th>1RM est.</th><th>Rango</th></tr>
-            </thead>
-            <tbody></tbody>
-          </table>
-        </div>
-        <p id="unknown" class="note"></p>
-      </details>
-    </section>
+      <section class="card breakdown" id="breakdown" hidden>
+        <h2>DESGLOSE POR GRUPO MUSCULAR</h2>
+        <div class="grid-m" id="gridM"></div>
+      </section>
+    </div>
   </main>
+
+  <details class="all" id="allEx" hidden>
+    <summary>Todos los ejercicios (<span id="exCount">0</span>)</summary>
+    <div class="tablewrap">
+      <table id="exTable">
+        <thead><tr><th>Ejercicio</th><th>Músculo</th><th>Mejor serie</th><th>1RM est.</th><th>Rango</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <p id="unknown" class="note"></p>
+  </details>
 
   <footer>
     <p>Proyecto de aficionado inspirado en el sistema de rangos de Symmetry. No está afiliado a Symmetry ni a Hevy. Los rangos son una estimación a partir de tablas de fuerza relativa al peso corporal, no una medición oficial.</p>
   </footer>
 
+  <div class="dropveil" id="veil">Suelta tu CSV de Hevy</div>
   <script src="ranks.js"></script>
   <script src="app.js"></script>
 </body>

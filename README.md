@@ -24,20 +24,22 @@ En Hevy: **Perfil → Ajustes → Exportar datos → Exportar entrenamientos**. 
 1. Se descartan las series de calentamiento y las que tienen más de 30 repeticiones.
 2. Para cada ejercicio se toma el mejor 1RM estimado con la fórmula de Epley (las repeticiones se limitan a 12 para no inflar la estimación).
 3. Se divide entre tu peso corporal y entre el coeficiente `k` del ejercicio, que indica lo difícil que es respecto al press banca con barra (`k = 1`). El resultado se compara con una curva de percentiles estimados (`ANCHORS` en `ranks.js`) que va de 0 a 100.
-4. La puntuación de un músculo es la media ponderada (50/30/20) de sus tres mejores ejercicios, para que una sola máquina no decida el rango.
+4. Cada músculo se puntúa con su **ejercicio guía**: el mejor puntuado entre los que tienen al menos 3 series. Puedes cambiarlo en el desplegable de la tarjeta de detalle.
 5. El rango se asigna por percentil estimado:
 
-| Rango | Percentil mínimo |
-|---|---|
-| Bronce | 0 |
-| Plata | 40 |
-| Oro | 60 |
-| Platino | 80 |
-| Diamante | 90 |
-| Simétrico | 97 |
-| Top 1% | 99 |
+| Rango | Top | Percentil mínimo |
+|---|---|---|
+| Bronce | 80% | 0 |
+| Plata | 60% | 40 |
+| Oro | 40% | 60 |
+| Rubí | 30% | 70 |
+| Esmeralda | 20% | 80 |
+| Diamante | 10% | 90 |
+| Maestro | 5% | 95 |
+| Top 1% | 1% | 99 |
 
-6. El **rango general** es la media de los músculos con datos, y el **índice de simetría** baja cuanto más se separan unos músculos de otros (100 menos 1,5 veces la desviación típica de las puntuaciones).
+6. El **rango global** es la media de los músculos con datos. El **índice de simetría** baja cuanto más se separan unos músculos de otros (100 menos 1,5 veces la desviación típica de las puntuaciones). Con 85 o más aparece la insignia "Simétrico".
+7. La tarjeta de detalle incluye un **simulador**: cambia la carga y las repeticiones y verás al momento cómo cambian el e1RM, el rango del músculo, el global y la simetría. El botón "Restablecer" vuelve a tu mejor serie real.
 
 Para mujeres, los umbrales se multiplican por 0,62 (tren superior) y 0,8 (tren inferior). Los ejercicios con peso corporal (dominadas) suman tu peso al lastre.
 

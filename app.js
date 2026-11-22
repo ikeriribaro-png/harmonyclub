@@ -1,174 +1,271 @@
 /* app.js — interfaz. Depende de ranks.js (window.Ranks). */
 (() => {
   'use strict';
-  const { TIERS, MUSCLES, loadHevy, analyse } = Ranks;
+  const { TIERS, MUSCLES, LOWER, loadHevy, analyse, summary, e1rm, scoreFromRatio, ratioFromScore, tierIndex } = Ranks;
   const $ = (s, el = document) => el.querySelector(s);
-  const fmt = new Intl.NumberFormat('es-ES', { maximumFractionDigits: 1 });
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const n1 = x => x.toFixed(1);
 
-  const state = { rows: null, result: null, selected: null, view: 'front' };
+  const state = { rows: null, result: null, v: {}, selected: null, view: 'front', guide: {}, sim: {} };
+
+  /* ---------- Medallas ---------- */
+  const SHAPES = {
+    bronce: 'M12 2 20.5 5v7.2c0 4.6-3.6 7.8-8.5 9.8-4.9-2-8.5-5.2-8.5-9.8V5Z',
+    plata: 'M12 1.5 22.5 12 12 22.5 1.5 12Z',
+    oro: 'M12 2 22 9.4 18.2 21H5.8L2 9.4Z',
+    rubi: 'M8 2h8l6 6v8l-6 6H8l-6-6V8Z',
+    esmeralda: 'M12 1.8 21.2 7v10L12 22.2 2.8 17V7Z',
+    diamante: 'M6.8 3h10.4L22 9.2 12 21.5 2 9.2Z',
+    maestro: 'M2.5 19 1.8 7.5 7 11.5 12 3.5l5 8 5.2-4-.7 11.5Z',
+    top1: 'M12 1.8a10.2 10.2 0 1 0 0 20.4 10.2 10.2 0 0 0 0-20.4Z',
+  };
+  const STAR = 'M12 6.6l1.6 3.8 3.8 1.6-3.8 1.6L12 17.4l-1.6-3.8L6.6 12l3.8-1.6Z';
+  const gem = (tierId, size = 28) => {
+    const t = TIERS.find(x => x.id === tierId) || TIERS[0];
+    return `<svg class="gem" width="${size}" height="${size}" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="${SHAPES[t.id]}" fill="${t.color}" stroke="rgba(255,255,255,.6)" stroke-width="1" stroke-linejoin="round"/>
+      <path d="${SHAPES[t.id]}" fill="#000" opacity=".16" transform="translate(0 7) scale(1 .42) translate(0 -2)" style="clip-path:inset(0)"/>
+      ${t.id === 'maestro' ? '' : `<path d="${STAR}" fill="#fff" opacity=".92"/>`}</svg>`;
+  };
+  const tierLabel = i => (TIERS[i].id === 'top1' ? 'TOP 1%' : `${TIERS[i].name.toUpperCase()} (${TIERS[i].top}%)`);
 
   /* ---------- Figura (mitad derecha; la izquierda se espeja) ---------- */
-  const SHOULDER = 'M174 86C192 82 210 92 216 112C218 124 214 134 208 140C200 128 190 118 176 112Z';
-  const ARM = 'M208 140C216 128 222 120 224 114C230 130 232 160 230 184C224 192 216 192 210 186C206 170 204 154 208 140Z';
-  const FOREARM = 'M212 192C220 196 228 194 232 188C240 214 246 240 244 262C238 266 232 264 230 260C222 240 214 216 212 192Z';
+  const P = pts => 'M' + pts.map(p => p.join(' ')).join('L') + 'Z';
+  const SHOULDER = P([[156, 77], [172, 78], [184, 90], [186, 110], [176, 118], [167, 102], [160, 90]]);
+  const ARM = P([[177, 120], [187, 114], [195, 132], [196, 158], [186, 162], [178, 142]]);
+  const FORE = P([[186, 166], [196, 162], [207, 198], [211, 228], [202, 230], [190, 198]]);
   const BASE = [
-    'M139 62h22v22h-22Z',                                  // cuello
-    'M151 84L176 90L196 120L194 200L198 216H151Z',          // torso
-    'M236 262C246 262 252 274 250 288C246 298 238 298 234 288Z', // mano
-    'M156 344C168 340 184 342 192 350L190 364H160Z',        // rodilla
-    'M160 482C172 486 186 486 190 496C192 510 184 522 170 522C158 522 154 508 158 494Z' // pie
-  ];
+    [[121, 64], [154, 76], [178, 96], [180, 116], [172, 162], [168, 224], [121, 224]],   // torso
+    [[121, 46], [132, 48], [136, 66], [121, 68]],                                          // cuello
+    [[199, 232], [211, 229], [216, 248], [208, 254], [200, 244]],                          // mano
+    [[133, 328], [161, 328], [159, 352], [135, 352]],                                      // rodilla
+    [[132, 352], [140, 352], [145, 454], [136, 454]],                                      // tibia
+    [[136, 456], [152, 456], [160, 478], [132, 478]],                                      // pie
+  ].map(P);
+  const THIGH = [ // 3 bandas del muslo
+    [[124, 222], [138, 222], [141, 328], [132, 328]],
+    [[138, 222], [152, 222], [150, 328], [141, 328]],
+    [[152, 222], [167, 226], [160, 328], [150, 328]],
+  ].map(P);
   const VIEWS = {
     front: [
-      ['pecho', 'M151 92L174 87C186 94 192 108 190 120C184 132 166 136 151 134Z'],
-      ['abdomen', 'M152 138C166 140 180 138 186 136C188 160 186 186 182 202C174 210 162 212 152 212Z'],
-      ['biceps', ARM],
-      ['antebrazo', FOREARM],
-      ['hombros', SHOULDER],
-      ['cuadriceps', 'M155 216C172 214 188 220 194 236C198 276 194 316 188 344C180 352 164 352 158 344C154 304 154 256 155 216Z'],
-      ['aductores', 'M155 228L170 240C170 282 168 316 160 338C156 300 155 260 155 228Z'],
-      ['gemelos', 'M161 362C176 358 188 362 190 372C190 410 186 450 180 484C172 490 164 488 162 482C158 440 158 400 161 362Z'],
+      ['espalda', P([[122, 66], [136, 69], [152, 79], [122, 78]])],
+      ['pecho', P([[122, 81], [153, 82], [159, 97], [154, 112], [122, 114]])],
+      ['abdomen', P([[122, 117], [137, 117], [137, 131], [122, 131]])],
+      ['abdomen', P([[122, 134], [137, 134], [137, 148], [122, 148]])],
+      ['abdomen', P([[122, 151], [137, 151], [137, 165], [122, 165]])],
+      ['abdomen', P([[122, 168], [140, 168], [122, 200]])],
+      ['abdomen', P([[140, 118], [151, 116], [156, 138], [150, 164], [140, 166]])],
+      ['biceps', ARM], ['antebrazo', FORE], ['hombros', SHOULDER],
+      ['aductores', THIGH[0]], ['cuadriceps', THIGH[1]], ['cuadriceps', THIGH[2]],
+      ['gemelos', P([[140, 352], [158, 354], [164, 386], [158, 430], [150, 454], [144, 454], [141, 404]])],
     ],
     back: [
-      ['espalda', 'M151 82L172 88C188 96 196 118 198 150C192 176 174 194 151 198Z'],
-      ['triceps', ARM],
-      ['antebrazo', FOREARM],
-      ['hombros', SHOULDER],
-      ['gluteos', 'M151 202C172 198 194 206 196 230C194 252 172 260 151 256Z'],
-      ['isquios', 'M155 262C172 262 190 258 194 270C197 300 194 322 188 344C180 352 164 352 158 344C154 316 154 290 155 262Z'],
-      ['gemelos', 'M161 360C176 356 188 360 190 372C192 404 188 440 180 476C172 482 164 480 162 474C158 432 156 396 161 360Z'],
+      ['espalda', P([[122, 66], [137, 69], [153, 79], [122, 98]])],
+      ['espalda', P([[122, 102], [154, 86], [162, 100], [158, 130], [142, 152], [122, 154]])],
+      ['espalda', P([[122, 158], [142, 156], [146, 172], [122, 178]])],
+      ['triceps', ARM], ['antebrazo', FORE], ['hombros', SHOULDER],
+      ['gluteos', P([[122, 182], [150, 178], [164, 194], [162, 216], [144, 224], [122, 220]])],
+      ['isquios', THIGH[0]], ['isquios', THIGH[1]], ['isquios', THIGH[2]],
+      ['gemelos', P([[137, 352], [160, 354], [165, 390], [158, 432], [150, 454], [142, 454], [138, 404]])],
     ],
   };
-
   function bodySVG(view) {
     const half = BASE.map(d => `<path class="base" d="${d}"/>`).join('') +
-      VIEWS[view].map(([m, d]) => `<path class="m" data-m="${m}" d="${d}"><title>${MUSCLES[m]}</title></path>`).join('');
-    const head = '<ellipse class="base" cx="150" cy="36" rx="21" ry="27"/>';
-    return `${head}<g>${half}</g><g transform="translate(300 0) scale(-1 1)">${half}</g>`;
+      VIEWS[view].map(([m, d]) => `<path class="m" data-m="${m}" d="${d}"/>`).join('');
+    return `<ellipse class="head" cx="120" cy="27" rx="16" ry="21"/><g>${half}</g><g transform="translate(240 0) scale(-1 1)">${half}</g>`;
   }
 
-  const gem = (c, size = 22) =>
-    `<svg class="gem" width="${size}" height="${size}" viewBox="0 0 24 24" aria-hidden="true" style="--c:${c}">` +
-    `<path d="M12 2 21 8.5 12 22 3 8.5Z" fill="${c}"/><path d="M3 8.5h18L12 22Z" fill="#000" opacity=".2"/>` +
-    `<path d="M12 2 8 8.5h8Z" fill="#fff" opacity=".4"/></svg>`;
+  /* ---------- Vistas derivadas (ejercicio guía + simulación) ---------- */
+  const bodyweight = () => parseFloat($('#bw').value);
 
-  const topLabel = s => (s >= 99 ? 'Top 1%' : `Top ${Math.max(1, Math.round(100 - s))}%`);
+  function muscleView(id) {
+    const m = state.result.muscles[id]; if (!m) return null;
+    const ex = m.list.find(e => e.name === state.guide[id]) || m.top;
+    const sim = state.sim[id];
+    const w = sim ? sim.w : ex.best.w, reps = sim ? sim.reps : ex.best.reps;
+    const e1 = sim ? e1rm(ex.bw ? bodyweight() + w : w, reps) : ex.best.e1rm;
+    const score = scoreFromRatio(e1 / ex.scale), tier = tierIndex(score);
+    let next = null, frac = 1;
+    if (tier < TIERS.length - 1) {
+      const target = ratioFromScore(TIERS[tier + 1].min) * ex.scale;
+      next = { tier: tier + 1, delta: Math.max(0, target - e1) };
+      frac = (score - TIERS[tier].min) / (TIERS[tier + 1].min - TIERS[tier].min);
+    }
+    return { id, m, ex, w, reps, e1, ratio: e1 / bodyweight(), score, tier, next, frac: Math.min(1, Math.max(0, frac)), simulated: !!sim };
+  }
+  function computeViews() {
+    state.v = {};
+    for (const id of Object.keys(MUSCLES)) state.v[id] = state.result ? muscleView(id) : null;
+    const items = Object.values(state.v).filter(Boolean).map(v => ({ id: v.id, score: v.score }));
+    state.sum = summary(items);
+  }
 
   /* ---------- Render ---------- */
-  function render() {
-    const r = state.result; if (!r) return;
-    $('#result').hidden = false;
+  function renderGems() {
+    const cur = state.result ? state.sum.overall.tier : -1;
+    $('#gems').innerHTML = TIERS.map((t, i) =>
+      `<li class="${i === cur ? 'cur' : ''}" style="--c:${t.color}">${gem(t.id, 28)}<span>${t.id === 'top1' ? 'TOP 1%' : t.top + '%'}</span></li>`).join('');
+  }
 
-    // Figura
+  function renderBody() {
     const svg = $('#body');
     svg.innerHTML = bodySVG(state.view);
     svg.querySelectorAll('.m').forEach(el => {
-      const m = r.muscles[el.dataset.m];
-      if (m) { el.classList.add('has'); el.style.fill = TIERS[m.tier].color; el.style.setProperty('--c', TIERS[m.tier].color); }
-      el.querySelector('title').textContent = m ? `${MUSCLES[el.dataset.m]}: ${TIERS[m.tier].name}` : `${MUSCLES[el.dataset.m]}: sin datos`;
-      if (el.dataset.m === state.selected) el.classList.add('sel');
+      const id = el.dataset.m, v = state.v[id];
+      if (v) { el.style.fill = TIERS[v.tier].color; el.style.setProperty('--c', TIERS[v.tier].color); }
+      if (id === state.selected) el.classList.add('sel');
+      const t = document.createElementNS('http://www.w3.org/2000/svg', 'title');
+      t.textContent = v ? `${MUSCLES[id]}: ${TIERS[v.tier].name}` : `${MUSCLES[id]}: sin datos`;
+      el.appendChild(t);
     });
-
-    // Resumen general
-    const o = r.overall, t = TIERS[o.tier];
-    $('#overall').style.setProperty('--c', t.color);
-    $('#overall').innerHTML = `${gem(t.color, 64)}
-      <div class="tier">${t.name}</div>
-      <div class="pct">Rango general · ${topLabel(o.score)} (percentil estimado ${fmt.format(o.score)})</div>
-      <div class="chips">
-        <span class="chip">Simetría <b>${r.symmetry ?? '–'}${r.symmetry != null ? '/100' : ''}</b></span>
-        <span class="chip">Músculos con datos <b>${o.count}/${o.total}</b></span>
-        ${r.weakest ? `<span class="chip">Punto débil <b>${MUSCLES[r.weakest.id]}</b></span>` : ''}
-      </div>`;
-
-    // Lista de músculos
-    $('#muscles').innerHTML = Object.keys(MUSCLES).map(id => {
-      const m = r.muscles[id], tc = m ? TIERS[m.tier].color : null;
-      return `<li><button type="button" data-m="${id}" class="${id === state.selected ? 'sel' : ''}" style="${tc ? `--c:${tc}` : ''}">
-        ${m ? gem(tc, 20) : '<span></span>'}
-        <span class="name">${MUSCLES[id]}</span>
-        <span class="bar"><i style="width:${m ? Math.max(3, m.score) : 0}%"></i></span>
-        <span class="rk">${m ? TIERS[m.tier].name : 'Sin datos'}</span></button></li>`;
-    }).join('');
-
-    // Leyenda de rangos
-    $('#legend').innerHTML = TIERS.map((tr, i) => `<li class="${i === o.tier ? 'cur' : ''}" style="--c:${tr.color}">
-      ${gem(tr.color, 30)}<strong>${tr.name}</strong><span>${tr.min === 0 ? 'Inicio' : 'Top ' + (100 - tr.min) + '%'}</span></li>`).join('');
-
-    renderDetail();
-    renderTable();
   }
 
-  function renderDetail() {
-    const r = state.result, id = state.selected, box = $('#detail');
-    if (!id) {
-      box.innerHTML = `<h2>Toca un músculo</h2><p>Pulsa en la figura o en la lista para ver qué ejercicios lo puntúan y cuánto te falta para el siguiente rango.</p>`;
+  function callout(el, title, tierIdx, sub, cap) {
+    const t = TIERS[tierIdx];
+    el.style.setProperty('--c', t.color);
+    el.innerHTML = `<b>${title}</b><div class="row">${gem(t.id, 34)}<i></i></div><span>${esc(sub)}</span><em>${cap}</em>`;
+  }
+
+  function renderCallouts() {
+    const items = Object.values(state.v).filter(Boolean);
+    const s = state.sum;
+    if (items.length < 2) { ['TL', 'TR', 'BL', 'BR'].forEach(k => { $('#co' + k).innerHTML = ''; }); return; }
+    const sym = s.symmetry;
+    if (sym >= 85) callout($('#coTL'), 'SIMÉTRICO', 7, `Simetría ${sym}/100`, 'Físico equilibrado');
+    else if (sym >= 70) callout($('#coTL'), 'EQUILIBRADO', 4, `Simetría ${sym}/100`, 'Algún músculo rezagado');
+    else callout($('#coTL'), 'ASIMÉTRICO', 2, `Simetría ${sym}/100`, 'Grandes diferencias');
+    const strong = state.v[s.strongest.id], weak = state.v[s.weakest.id];
+    callout($('#coTR'), TIERS[strong.tier].name.toUpperCase(), strong.tier, MUSCLES[strong.id], 'Más fuerte');
+    callout($('#coBL'), TIERS[weak.tier].name.toUpperCase(), weak.tier, MUSCLES[weak.id], 'Punto débil');
+    const close = items.filter(v => v.next && v.id !== weak.id).sort((a, b) => a.next.delta / a.e1 - b.next.delta / b.e1)[0] || items[0];
+    callout($('#coBR'), TIERS[close.tier].name.toUpperCase(), close.tier, MUSCLES[close.id], 'Cerca de subir');
+  }
+
+  function renderBadges() {
+    const vs = Object.values(state.v).filter(Boolean), out = [];
+    if (state.sum.symmetry >= 85) out.push('<span class="badge blue">Simétrico</span>');
+    const up = vs.filter(v => !LOWER.has(v.id)), lo = vs.filter(v => LOWER.has(v.id));
+    if (up.length && lo.length) {
+      const d = up.reduce((a, v) => a + v.score, 0) / up.length - lo.reduce((a, v) => a + v.score, 0) / lo.length;
+      if (d >= 5) out.push('<span class="badge gold">Torso &gt; Pierna</span>');
+      else if (d <= -5) out.push('<span class="badge gold">Pierna &gt; Torso</span>');
+    }
+    const tops = vs.filter(v => v.tier === 7).length;
+    if (tops) out.push(`<span class="badge purple">Top 1%${tops > 1 ? ' ×' + tops : ''}</span>`);
+    $('#badges').innerHTML = out.join('');
+  }
+
+  function renderBreakdown() {
+    $('#gridM').innerHTML = Object.keys(MUSCLES).map(id => {
+      const v = state.v[id], c = v ? TIERS[v.tier].color : '';
+      return `<button type="button" class="mbtn ${id === state.selected ? 'sel' : ''}" data-m="${id}" style="--c:${c}">
+        ${v ? gem(TIERS[v.tier].id, 26) : '<svg class="gem" width="26" height="26" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" fill="#2c3342"/></svg>'}
+        <span><b>${MUSCLES[id]}</b><small>${v ? `${TIERS[v.tier].name} · ${v.ratio.toFixed(2)}x` : 'Sin datos'}</small></span></button>`;
+    }).join('');
+  }
+
+  function renderDetail(fillInputs) {
+    const id = state.selected, v = state.v[id];
+    $('#dBody').hidden = !v; $('#dEmpty').hidden = !!v;
+    if (!v) {
+      $('#dEmpty').textContent = `${MUSCLES[id]}: no hay series válidas en el periodo elegido. Prueba con "Todo el historial" o entrena alguno de sus ejercicios.`;
       return;
     }
-    const m = r.muscles[id];
-    if (!m) {
-      box.innerHTML = `<h2>${MUSCLES[id]}</h2><p>No hay series válidas para este músculo en el periodo elegido. Prueba con "Todo el historial" o entrena alguno de sus ejercicios.</p>`;
-      return;
+    const t = TIERS[v.tier], card = $('#detail');
+    card.style.setProperty('--c', t.color);
+    card.style.setProperty('--c2', v.next ? TIERS[v.next.tier].color : t.color);
+    $('#dGem').innerHTML = gem(t.id, 52);
+    $('#dPill').textContent = tierLabel(v.tier);
+    $('#dName').textContent = MUSCLES[id];
+    $('#dE1').textContent = `${n1(v.e1)} kg`;
+    $('#dRatio').textContent = `${v.ratio.toFixed(2)}x BW`;
+    $('#dTier').textContent = tierLabel(v.tier).replace(/^(\S+)/, s => s[0] + s.slice(1).toLowerCase());
+    $('#dNext').textContent = v.next ? `Faltan +${n1(v.next.delta)} kg e1RM para ${TIERS[v.next.tier].name}` : 'Rango máximo alcanzado';
+    $('#dBar').style.width = `${Math.round(v.frac * 100)}%`;
+    $('#lblW').textContent = v.ex.bw ? 'Lastre añadido (kg)' : 'Carga levantada (kg)';
+    $('#dNote').textContent = v.simulated
+      ? `Simulación. Tu mejor serie real: ${n1(v.ex.best.w)} kg × ${v.ex.best.reps}.`
+      : `Mejor serie real${v.ex.bw ? ' (lastre sobre tu peso corporal)' : ''}. Cambia los valores para simular.${v.ex.guessed ? ' Ejercicio no catalogado: estimación aproximada.' : ''}`;
+    $('#simReset').hidden = !v.simulated;
+
+    if (fillInputs) {
+      const sel = $('#dGuide');
+      sel.innerHTML = v.m.list.map(e => `<option value="${esc(e.name)}" ${e.name === v.ex.name ? 'selected' : ''}>${esc(e.name)}</option>`).join('');
+      sel.disabled = v.m.list.length < 2;
+      $('#simW').value = v.w; $('#simR').value = v.reps;
     }
-    const t = TIERS[m.tier];
-    box.innerHTML = `<h2 style="color:${t.color}">${MUSCLES[id]} · ${t.name}</h2>
-      <p>La puntuación del músculo es la media ponderada (50/30/20) de sus tres mejores ejercicios.</p>
-      <ul class="exlist">${m.list.map(e => {
-        const et = TIERS[e.tier];
-        const n = e.next
-          ? `Para ${e.next.tier.name}: ≈ ${fmt.format(e.next.weight)} kg${e.bw ? ' de lastre' : ''} × ${e.next.reps}`
-          : 'Rango máximo alcanzado';
-        return `<li style="--c:${et.color}"><span class="en">${esc(e.name)}</span><span class="rk">${et.name}</span>
-          <span class="sub">Mejor serie ${fmt.format(e.best.w)} kg × ${e.best.reps} · ${n}${e.guessed ? ' · ejercicio no catalogado, estimación aproximada' : ''}</span></li>`;
-      }).join('')}</ul>`;
   }
 
   function renderTable() {
     const r = state.result;
+    $('#allEx').hidden = !r; if (!r) return;
     $('#exCount').textContent = r.exercises.length;
     $('#exTable tbody').innerHTML = r.exercises.map(e => {
       const t = TIERS[e.tier];
       return `<tr style="--c:${t.color}"><td>${esc(e.name)}</td><td>${MUSCLES[e.muscle]}</td>
-        <td>${fmt.format(e.best.w)} kg × ${e.best.reps}</td><td>${fmt.format(e.best.e1rm)} kg</td>
-        <td><span class="dot"></span>${t.name}</td></tr>`;
+        <td>${n1(e.best.w)} kg × ${e.best.reps}</td><td>${n1(e.best.e1rm)} kg</td><td><span class="dot"></span>${t.name}</td></tr>`;
     }).join('');
     $('#unknown').textContent = r.unknown.length
-      ? `Ejercicios sin catalogar (no puntúan): ${r.unknown.slice(0, 12).map(([n]) => n).join(', ')}${r.unknown.length > 12 ? '…' : ''}. Puedes añadirlos en ranks.js.`
-      : '';
+      ? `Ejercicios sin catalogar (no puntúan): ${r.unknown.slice(0, 12).map(([n]) => n).join(', ')}${r.unknown.length > 12 ? '…' : ''}. Puedes añadirlos en ranks.js.` : '';
+  }
+
+  function renderAll(fillInputs = true) {
+    const has = !!state.result;
+    $('#app').classList.toggle('empty', !has);
+    $('#welcome').hidden = has; $('#detail').hidden = !has; $('#breakdown').hidden = !has;
+    const bw = bodyweight();
+    $('#bwPill').textContent = `BW: ${n1(isFinite(bw) ? bw : 0)} kg`;
+    computeViews();
+    renderGems();
+    const pill = $('#globalPill');
+    if (!has) {
+      pill.classList.remove('on'); pill.textContent = 'GLOBAL: –';
+      $('#symVal').textContent = '–'; $('#badges').innerHTML = '';
+      renderBody(); renderCallouts(); renderTable();
+      return;
+    }
+    const o = state.sum.overall;
+    pill.classList.add('on'); pill.style.setProperty('--c', TIERS[o.tier].color);
+    pill.textContent = `GLOBAL: ${TIERS[o.tier].name}`;
+    $('#symVal').textContent = state.sum.symmetry != null ? state.sum.symmetry + '%' : '–';
+    renderBody(); renderCallouts(); renderBadges(); renderBreakdown(); renderDetail(fillInputs); renderTable();
   }
 
   /* ---------- Cálculo ---------- */
-  function showError(msg) {
-    const el = $('#error'); el.hidden = !msg; el.textContent = msg || '';
-  }
+  function showError(msg) { const el = $('#error'); el.hidden = !msg; el.textContent = msg || ''; }
+
   function recompute() {
     if (!state.rows) return;
-    const bw = parseFloat($('#bw').value);
+    const bw = bodyweight();
     if (!(bw >= 30 && bw <= 250)) { showError('Indica un peso corporal entre 30 y 250 kg.'); return; }
     showError('');
-    const sex = document.querySelector('input[name=sex]:checked').value;
+    const sex = $('#sex').value;
     state.result = analyse(state.rows, { bodyweight: bw, sex, days: +$('#period').value });
+    state.sim = {};
     if (!state.result.exercises.length) {
-      $('#result').hidden = true;
-      showError('No he encontrado series puntuables en el periodo elegido. Prueba con "Todo el historial".');
-      return;
+      state.result = null; showError('No he encontrado series puntuables en el periodo elegido. Prueba con "Todo el historial".');
+      renderAll(); return;
+    }
+    for (const id of Object.keys(state.guide)) {
+      const m = state.result.muscles[id];
+      if (!m || !m.list.some(e => e.name === state.guide[id])) delete state.guide[id];
+    }
+    if (!state.selected || !state.result.muscles[state.selected]) {
+      state.selected = Object.keys(MUSCLES).find(id => state.result.muscles[id]) || 'pecho';
     }
     try { localStorage.setItem('ranks-prefs', JSON.stringify({ bw, sex })); } catch (_) { /* sin almacenamiento */ }
-    render();
+    renderAll();
   }
 
-  function useCSV(text, label) {
-    try { state.rows = loadHevy(text); } catch (e) { state.rows = null; $('#result').hidden = true; showError(e.message); return; }
-    $('#drop').classList.add('loaded');
-    $('#dropTitle').textContent = label;
-    $('#dropHint').textContent = `${state.rows.length.toLocaleString('es-ES')} filas leídas. Puedes cambiar el archivo cuando quieras.`;
+  function useCSV(text) {
+    try { state.rows = loadHevy(text); } catch (e) { state.rows = null; state.result = null; showError(e.message); renderAll(); return; }
+    state.guide = {}; state.selected = null;
     recompute();
   }
 
-  /* ---------- Datos de ejemplo ---------- */
+  /* ---------- Datos de ejemplo (distintos cada vez) ---------- */
   function demoCSV() {
-    // Cada vez se genera un perfil distinto: nivel global, nivel por ejercicio, progresión y ejercicios elegidos al azar.
     const rnd = (a, b) => a + Math.random() * (b - a);
     const pick = (arr, n) => [...arr].sort(() => Math.random() - 0.5).slice(0, n);
     const lifts = [
@@ -177,11 +274,10 @@
       ['Leg Press (Machine)', 220, 10], ['Seated Cable Row - Bar Grip', 70, 10], ['Hip Thrust (Barbell)', 110, 8], ['Crunch (Machine)', 45, 12],
       ['Incline Bench Press (Dumbbell)', 30, 8], ['Butterfly (Pec Deck)', 70, 12], ['Lateral Raise (Cable)', 12, 12], ['Hip Adduction (Machine)', 90, 12],
       ['Leg Extension (Machine)', 80, 12], ['Deadlift (Barbell)', 130, 5], ['Preacher Curl (Machine)', 40, 10], ['Triceps Extension (Cable)', 30, 10],
+      ['Behind the Back Wrist Curl (Barbell)', 30, 12],
     ];
-    const level = rnd(0.55, 1.5);                 // nivel general del "atleta" de ejemplo
-    const weeks = Math.floor(rnd(8, 40));         // duración del historial
-    const chosen = pick(lifts, Math.floor(rnd(9, lifts.length + 1)))
-      .map(([n, w, r]) => [n, Math.round(w * level * rnd(0.6, 1.4) * 2) / 2, r]);
+    const level = rnd(0.55, 1.5), weeks = Math.floor(rnd(8, 40));
+    const chosen = pick(lifts, Math.floor(rnd(11, lifts.length + 1))).map(([n, w, r]) => [n, Math.round(w * level * rnd(0.6, 1.4) * 2) / 2, r]);
     const months = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
     const out = ['title,start_time,exercise_title,set_index,set_type,weight_kg,reps'];
     for (let wk = 0; wk < weeks; wk++) {
@@ -195,31 +291,41 @@
   }
 
   /* ---------- Eventos ---------- */
-  $('#file').addEventListener('change', async e => {
-    const f = e.target.files[0]; if (f) useCSV(await f.text(), f.name);
-  });
-  const drop = $('#drop');
-  ['dragenter', 'dragover'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('over'); }));
-  ['dragleave', 'drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('over'); }));
-  drop.addEventListener('drop', async e => { const f = e.dataTransfer.files[0]; if (f) useCSV(await f.text(), f.name); });
-  $('#demo').addEventListener('click', () => useCSV(demoCSV(), 'Datos de ejemplo'));
-  ['#bw', '#period'].forEach(s => $(s).addEventListener('input', recompute));
-  document.querySelectorAll('input[name=sex]').forEach(i => i.addEventListener('change', recompute));
+  async function readFile(f) { if (f) useCSV(await f.text()); }
+  $('#file').addEventListener('change', async e => { await readFile(e.target.files[0]); e.target.value = ''; });
+  $('#demo').addEventListener('click', () => useCSV(demoCSV()));
 
-  document.querySelectorAll('.viewtoggle button').forEach(b => b.addEventListener('click', () => {
+  let depth = 0; const veil = $('#veil');
+  addEventListener('dragenter', e => { e.preventDefault(); depth++; veil.classList.add('on'); });
+  addEventListener('dragover', e => e.preventDefault());
+  addEventListener('dragleave', () => { if (--depth <= 0) { depth = 0; veil.classList.remove('on'); } });
+  addEventListener('drop', e => { e.preventDefault(); depth = 0; veil.classList.remove('on'); readFile(e.dataTransfer.files[0]); });
+
+  ['#bw', '#period', '#sex'].forEach(s => $(s).addEventListener('input', () => { state.rows ? recompute() : renderAll(); }));
+
+  document.querySelectorAll('.toggle button').forEach(b => b.addEventListener('click', () => {
     state.view = b.dataset.view;
-    document.querySelectorAll('.viewtoggle button').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
-    render();
+    document.querySelectorAll('.toggle button').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+    renderBody();
   }));
-  function select(id) {
-    state.selected = state.selected === id ? null : id; render();
-  }
-  $('#body').addEventListener('click', e => { const m = e.target.closest('.m'); if (m) select(m.dataset.m); });
-  $('#muscles').addEventListener('click', e => { const b = e.target.closest('button'); if (b) select(b.dataset.m); });
 
-  // Preferencias guardadas
+  function select(id) { state.selected = id; renderAll(true); }
+  $('#body').addEventListener('click', e => { const m = e.target.closest('.m'); if (m && state.result) select(m.dataset.m); });
+  $('#gridM').addEventListener('click', e => { const b = e.target.closest('.mbtn'); if (b) select(b.dataset.m); });
+
+  $('#dGuide').addEventListener('change', e => { state.guide[state.selected] = e.target.value; delete state.sim[state.selected]; renderAll(true); });
+  function onSim() {
+    const w = parseFloat($('#simW').value), reps = Math.round(parseFloat($('#simR').value));
+    if (!(w >= 0) || !(reps >= 1 && reps <= 30)) return;
+    state.sim[state.selected] = { w, reps }; renderAll(false);
+  }
+  ['#simW', '#simR'].forEach(s => $(s).addEventListener('input', onSim));
+  $('#simReset').addEventListener('click', () => { delete state.sim[state.selected]; renderAll(true); });
+
   try {
     const p = JSON.parse(localStorage.getItem('ranks-prefs') || 'null');
-    if (p) { $('#bw').value = p.bw; (p.sex === 'f' ? $('#sexF') : $('#sexM')).checked = true; }
+    if (p) { $('#bw').value = p.bw; $('#sex').value = p.sex === 'f' ? 'f' : 'm'; }
   } catch (_) { /* ignorar */ }
+
+  renderAll();
 })();
