@@ -126,6 +126,18 @@
         <h2>DESGLOSE POR GRUPO MUSCULAR</h2>
         <div class="grid-m" id="gridM"></div>
       </section>
+
+      <section class="card history-card" id="history" hidden>
+        <div class="card-head">
+          <h2>HISTORIAL &amp;<br>PROGRESO</h2>
+          <div class="history-actions" style="display:flex; gap:8px; align-items:center;">
+            <button type="button" class="btn-ghost" id="exportImg" style="padding:6px 12px; font-size:12px;">Copiar resumen</button>
+            <button type="button" class="link" id="clearHistory" style="font-size:12px;">Borrar</button>
+          </div>
+        </div>
+        <canvas id="progressChart" width="400" height="180" style="display:none;"></canvas>
+        <div id="historyList"></div>
+      </section>
     </div>
   </main>
 

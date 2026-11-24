@@ -42,42 +42,44 @@
     renderProgressChart(hist);
   }
   function renderProgressChart(hist) {
-    const canvas = document.querySelector('#progressChart'); if (!canvas || hist.length < 2) return;
+    const canvas = document.querySelector('#progressChart'); if (!canvas) return;
+    if (hist.length < 2) { canvas.style.display = 'none'; return; }
+    canvas.style.display = 'block';
     const ctx = canvas.getContext('2d');
     const dpr = window.devicePixelRatio || 1;
-    const W = canvas.clientWidth || 400, H = canvas.clientHeight || 200;
+    const W = canvas.clientWidth || 400, H = canvas.clientHeight || 180;
     canvas.width = W * dpr; canvas.height = H * dpr;
     ctx.scale(dpr, dpr);
     ctx.clearRect(0, 0, W, H);
     const pad = { l: 36, r: 12, t: 12, b: 24 };
-    const w = W - pad.l - pad.r, h = H - pad.t - pad.b;
+    const w = W - pad.l - pad.r, plotH = H - pad.t - pad.b;
     // Tier threshold lines
     ctx.setLineDash([4, 4]); ctx.lineWidth = 0.5;
     for (const tier of TIERS) {
       if (tier.min <= 0) continue;
-      const y = pad.t + h - (tier.min / 100) * h;
+      const y = pad.t + plotH - (tier.min / 100) * plotH;
       ctx.strokeStyle = tier.color + '44'; ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(pad.l + w, y); ctx.stroke();
       ctx.fillStyle = tier.color + '88'; ctx.font = '9px Inter,sans-serif'; ctx.fillText(tier.name, 2, y + 3);
     }
     ctx.setLineDash([]);
     // Data line
     ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+    ctx.strokeStyle = '#38b6ff';
     ctx.beginPath();
-    hist.forEach((h, i) => {
+    hist.forEach((item, i) => {
       const x = pad.l + (i / (hist.length - 1)) * w;
-      const y = pad.t + h - (h.global / 100) * (H - pad.t - pad.b);
-      const tierIdx = Ranks.tierIndex(h.global);
-      ctx.strokeStyle = TIERS[tierIdx].color;
+      const y = pad.t + plotH - (item.global / 100) * plotH;
       if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
     });
     ctx.stroke();
     // Dots
-    hist.forEach((h, i) => {
+    hist.forEach((item, i) => {
       const x = pad.l + (i / (hist.length - 1)) * w;
-      const y = pad.t + (H - pad.t - pad.b) - (h.global / 100) * (H - pad.t - pad.b);
-      const tierIdx = Ranks.tierIndex(h.global);
+      const y = pad.t + plotH - (item.global / 100) * plotH;
+      const tierIdx = Ranks.tierIndex(item.global);
       ctx.fillStyle = TIERS[tierIdx].color;
-      ctx.beginPath(); ctx.arc(x, y, 3, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = '#0b1020'; ctx.lineWidth = 1.5; ctx.stroke();
     });
   }
 
