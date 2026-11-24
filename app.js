@@ -1,12 +1,85 @@
 /* app.js — interfaz. Depende de ranks.js (window.Ranks). */
 (() => {
   'use strict';
-  const { TIERS, MUSCLES, LOWER, loadHevy, analyse, summary, e1rm, scoreFromRatio, ratioFromScore, tierIndex } = Ranks;
+  const { TIERS, MUSCLES, LOWER, loadHevy, analyse, summary, e1rm, scoreFromRatio, ratioFromScore, tierIndex, formatDate, exportSummary } = Ranks;
   const $ = (s, el = document) => el.querySelector(s);
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const n1 = x => x.toFixed(1);
 
   const state = { rows: null, result: null, v: {}, selected: null, view: 'front', guide: {}, sim: {} };
+
+  /* ---------- Notificaciones Toast ---------- */
+  function showToast(msg, type = 'info') {
+    const t = document.createElement('div');
+    t.className = 'toast' + (type !== 'info' ? ' ' + type : '');
+    t.textContent = msg;
+    document.body.appendChild(t);
+    setTimeout(() => { t.style.opacity = '0'; t.style.transition = 'opacity .3s'; }, 2500);
+    setTimeout(() => t.remove(), 3000);
+  }
+
+  /* ---------- Historial ---------- */
+  function saveHistory() {
+    if (!state.result) return;
+    const bw = bodyweight();
+    const entry = Ranks.exportSummary ? Ranks.exportSummary(state.result, bw) : null;
+    if (!entry) return;
+    let hist = []; try { hist = JSON.parse(localStorage.getItem('ranks-history') || '[]'); } catch(_) {}
+    hist.push(entry);
+    if (hist.length > 50) hist = hist.slice(-50);
+    try { localStorage.setItem('ranks-history', JSON.stringify(hist)); } catch(_) {}
+  }
+  function renderHistory() {
+    const el = document.querySelector('#historyList'); if (!el) return;
+    const histSec = document.querySelector('#history');
+    let hist = []; try { hist = JSON.parse(localStorage.getItem('ranks-history') || '[]'); } catch(_) {}
+    if (!hist.length) { if (histSec) histSec.hidden = true; return; }
+    if (histSec) histSec.hidden = false;
+    el.innerHTML = hist.slice().reverse().slice(0, 10).map(h => {
+      const d = Ranks.formatDate ? Ranks.formatDate(h.date) : new Date(h.date).toLocaleDateString();
+      return '<div class="history-item"><span class="date">' + esc(d) + '</span><span class="rank" style="color:' + (TIERS.find(t=>t.name===h.globalTier)||TIERS[0]).color + '">' + esc(h.globalTier) + ' · ' + h.global + '</span><span>Sim: ' + (h.symmetry != null ? h.symmetry + '%' : '–') + '</span></div>';
+    }).join('');
+    renderProgressChart(hist);
+  }
+  function renderProgressChart(hist) {
+    const canvas = document.querySelector('#progressChart'); if (!canvas || hist.length < 2) return;
+    const ctx = canvas.getContext('2d');
+    const dpr = window.devicePixelRatio || 1;
+    const W = canvas.clientWidth || 400, H = canvas.clientHeight || 200;
+    canvas.width = W * dpr; canvas.height = H * dpr;
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, W, H);
+    const pad = { l: 36, r: 12, t: 12, b: 24 };
+    const w = W - pad.l - pad.r, h = H - pad.t - pad.b;
+    // Tier threshold lines
+    ctx.setLineDash([4, 4]); ctx.lineWidth = 0.5;
+    for (const tier of TIERS) {
+      if (tier.min <= 0) continue;
+      const y = pad.t + h - (tier.min / 100) * h;
+      ctx.strokeStyle = tier.color + '44'; ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(pad.l + w, y); ctx.stroke();
+      ctx.fillStyle = tier.color + '88'; ctx.font = '9px Inter,sans-serif'; ctx.fillText(tier.name, 2, y + 3);
+    }
+    ctx.setLineDash([]);
+    // Data line
+    ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+    ctx.beginPath();
+    hist.forEach((h, i) => {
+      const x = pad.l + (i / (hist.length - 1)) * w;
+      const y = pad.t + h - (h.global / 100) * (H - pad.t - pad.b);
+      const tierIdx = Ranks.tierIndex(h.global);
+      ctx.strokeStyle = TIERS[tierIdx].color;
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+    // Dots
+    hist.forEach((h, i) => {
+      const x = pad.l + (i / (hist.length - 1)) * w;
+      const y = pad.t + (H - pad.t - pad.b) - (h.global / 100) * (H - pad.t - pad.b);
+      const tierIdx = Ranks.tierIndex(h.global);
+      ctx.fillStyle = TIERS[tierIdx].color;
+      ctx.beginPath(); ctx.arc(x, y, 3, 0, Math.PI * 2); ctx.fill();
+    });
+  }
 
   /* ---------- Medallas ---------- */
   const SHAPES = {
@@ -262,6 +335,9 @@
     try { state.rows = loadHevy(text); } catch (e) { state.rows = null; state.result = null; showError(e.message); renderAll(); return; }
     state.guide = {}; state.selected = null;
     recompute();
+    saveHistory();
+    renderHistory();
+    showToast('CSV importado: ' + (state.result ? state.result.exercises.length + ' ejercicios, ' + state.result.sets + ' series' : 'sin datos'), state.result ? 'success' : 'error');
   }
 
   /* ---------- Datos de ejemplo (distintos cada vez) ---------- */
@@ -309,7 +385,11 @@
     renderBody();
   }));
 
-  function select(id) { state.selected = id; renderAll(true); }
+  function select(id) {
+    state.selected = id;
+    if (window.innerWidth <= 1020) { const det = document.querySelector('#detail'); if (det) det.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }
+    renderAll(true);
+  }
   $('#body').addEventListener('click', e => { const m = e.target.closest('.m'); if (m && state.result) select(m.dataset.m); });
   $('#gridM').addEventListener('click', e => { const b = e.target.closest('.mbtn'); if (b) select(b.dataset.m); });
 
@@ -322,10 +402,56 @@
   ['#simW', '#simR'].forEach(s => $(s).addEventListener('input', onSim));
   $('#simReset').addEventListener('click', () => { delete state.sim[state.selected]; renderAll(true); });
 
+  const clearBtn = document.querySelector('#clearHistory');
+  if (clearBtn) clearBtn.addEventListener('click', () => { try { localStorage.removeItem('ranks-history'); } catch(_) {} renderHistory(); showToast('Historial borrado'); });
+
+  const exportBtn = document.querySelector('#exportImg');
+  if (exportBtn) exportBtn.addEventListener('click', () => {
+    if (!state.result) { showToast('Importa un CSV primero', 'error'); return; }
+    const s = state.sum, bw = bodyweight();
+    let text = '🏋️ Symmetry Rank Engine\n';
+    text += '━━━━━━━━━━━━━━━━━━━━━━\n';
+    text += 'Global: ' + TIERS[s.overall.tier].name + ' (' + Math.round(s.overall.score) + '/100)\n';
+    text += 'Simetría: ' + (s.symmetry != null ? s.symmetry + '%' : '–') + '\n';
+    text += 'BW: ' + bodyweight() + ' kg\n';
+    text += '━━━━━━━━━━━━━━━━━━━━━━\n';
+    for (const id of Object.keys(MUSCLES)) {
+      const v = state.v[id];
+      if (v) text += MUSCLES[id] + ': ' + TIERS[v.tier].name + ' (' + Math.round(v.score) + ')\n';
+    }
+    navigator.clipboard.writeText(text).then(() => showToast('Resumen copiado al portapapeles ✓', 'success')).catch(() => showToast('No se pudo copiar', 'error'));
+  });
+
+  document.addEventListener('keydown', e => {
+    if (!state.result) return;
+    const keys = Object.keys(MUSCLES);
+    const idx = keys.indexOf(state.selected);
+    if (e.key === 'ArrowDown' || e.key === 'ArrowRight') { e.preventDefault(); select(keys[(idx + 1) % keys.length]); }
+    else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') { e.preventDefault(); select(keys[(idx - 1 + keys.length) % keys.length]); }
+    else if (e.key === 'Escape') { state.selected = null; renderAll(true); }
+  });
+
+  /* ---------- SVG Tooltip ---------- */
+  const tooltip = document.createElement('div');
+  tooltip.className = 'svg-tooltip';
+  tooltip.style.display = 'none';
+  document.body.appendChild(tooltip);
+  document.querySelector('#body').addEventListener('mousemove', e => {
+    const m = e.target.closest('.m');
+    if (!m || !state.result) { tooltip.style.display = 'none'; return; }
+    const id = m.dataset.m, v = state.v[id];
+    tooltip.style.display = 'block';
+    tooltip.style.left = (e.clientX + 12) + 'px';
+    tooltip.style.top = (e.clientY - 10) + 'px';
+    tooltip.innerHTML = '<b>' + MUSCLES[id] + '</b><br>' + (v ? TIERS[v.tier].name + ' · ' + Math.round(v.score) + '/100' : 'Sin datos');
+  });
+  document.querySelector('#body').addEventListener('mouseleave', () => { tooltip.style.display = 'none'; });
+
   try {
     const p = JSON.parse(localStorage.getItem('ranks-prefs') || 'null');
     if (p) { $('#bw').value = p.bw; $('#sex').value = p.sex === 'f' ? 'f' : 'm'; }
   } catch (_) { /* ignorar */ }
 
   renderAll();
+  renderHistory();
 })();

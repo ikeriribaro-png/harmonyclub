@@ -42,6 +42,11 @@ const Ranks = (() => {
     'Chest Press (Machine)': ['pecho', 0.95],
     'Butterfly (Pec Deck)': ['pecho', 1.2],
     'Dragonfly': ['pecho', 0.8],
+    'Incline Bench Press (Barbell)': ['pecho', 0.85],
+    'Chest Fly (Dumbbell)': ['pecho', 0.2],
+    'Cable Fly Crossovers': ['pecho', 0.35],
+    'Low Cable Fly Crossovers': ['pecho', 0.3],
+    'Push Up': ['pecho', 0.65, true],
     // Espalda
     'Lat Pulldown (Cable)': ['espalda', 0.95],
     'Lat Pulldown (Machine)': ['espalda', 0.95],
@@ -54,10 +59,10 @@ const Ranks = (() => {
     'Pendlay Row (Barbell)': ['espalda', 0.95],
     'Chin Up (Weighted)': ['espalda', 1.35, true],
     'Pull Up': ['espalda', 1.35, true],
-    'Incline Bench Press (Barbell)': ['pecho', 0.85],
-    'Chest Fly (Dumbbell)': ['pecho', 0.2],
-    'Cable Fly Crossovers': ['pecho', 0.35],
-    'Low Cable Fly Crossovers': ['pecho', 0.3],
+    'Pull Up (Weighted)': ['espalda', 1.35, true],
+    'T-Bar Row': ['espalda', 0.95],
+    'Bent Over Row (Barbell)': ['espalda', 0.95],
+    'Bent Over Row (Dumbbell)': ['espalda', 0.4],
     // Hombros
     'Shoulder Press (Dumbbell)': ['hombros', 0.32],
     'Seated Shoulder Press (Machine)': ['hombros', 0.7],
@@ -66,6 +71,8 @@ const Ranks = (() => {
     'Face Pull': ['hombros', 0.5],
     'Rear Delt Reverse Fly (Machine)': ['hombros', 0.7],
     'Reverse Fly Single Arm (Cable)': ['hombros', 0.2],
+    'Arnold Press (Dumbbell)': ['hombros', 0.35],
+    'Overhead Press (Barbell)': ['hombros', 0.7],
     // Bíceps
     'Preacher Curl (Machine)': ['biceps', 0.6],
     'Curl Martillo Cable Unilateral': ['biceps', 0.22],
@@ -78,6 +85,8 @@ const Ranks = (() => {
     'Bicep Curl (Cable)': ['biceps', 0.45],
     'Preacher Curl (Dumbbell)': ['biceps', 0.35],
     'Preacher Curl (Barbell)': ['biceps', 0.45],
+    'Concentration Curl (Dumbbell)': ['biceps', 0.25],
+    'Spider Curl (Dumbbell)': ['biceps', 0.28],
     // Tríceps
     'Triceps Extension (Cable)': ['triceps', 0.6],
     'Triceps Pushdown': ['triceps', 0.75],
@@ -87,30 +96,58 @@ const Ranks = (() => {
     'Triceps Kickback (Cable)': ['triceps', 0.25],
     'Bench Press - Close Grip (Barbell)': ['triceps', 0.8],
     'Skullcrusher (Barbell)': ['triceps', 0.5],
+    'Dip': ['triceps', 1.0, true],
+    'Dip (Weighted)': ['triceps', 1.0, true],
     // Antebrazo
     'Reverse Curl (Barbell)': ['antebrazo', 0.45],
     'Behind the Back Wrist Curl (Barbell)': ['antebrazo', 0.7],
+    'Wrist Curl (Dumbbell)': ['antebrazo', 0.3],
     // Abdomen
     'Crunch (Machine)': ['abdomen', 1.0],
     'Decline Crunch (Weighted)': ['abdomen', 0.4],
+    'Cable Crunch': ['abdomen', 0.7],
+    'Hanging Leg Raise': ['abdomen', 0.5, true],
     // Piernas
     'Squat (Barbell)': ['cuadriceps', 1.35],
     'Squat (Smith Machine)': ['cuadriceps', 1.4],
     'Leg Press (Machine)': ['cuadriceps', 3.6],
     'Leg Press Horizontal (Machine)': ['cuadriceps', 2.0],
     'Leg Extension (Machine)': ['cuadriceps', 1.1],
+    'Bulgarian Split Squat (Dumbbell)': ['cuadriceps', 0.4],
+    'Goblet Squat (Dumbbell)': ['cuadriceps', 0.5],
+    'Hack Squat (Machine)': ['cuadriceps', 1.5],
+    'Front Squat (Barbell)': ['cuadriceps', 1.1],
     'Seated Leg Curl (Machine)': ['isquios', 1.1],
     'Lying Leg Curl (Machine)': ['isquios', 1.0],
     'Deadlift (Barbell)': ['isquios', 1.7],
+    'Romanian Deadlift (Barbell)': ['isquios', 1.4],
+    'Romanian Deadlift (Dumbbell)': ['isquios', 0.5],
+    'Sumo Deadlift (Barbell)': ['isquios', 1.6],
     'Hip Adduction (Machine)': ['aductores', 1.7],
     'Hip Thrust (Machine)': ['gluteos', 1.8],
     'Hip Thrust (Barbell)': ['gluteos', 1.7],
+    'Glute Kickback (Cable)': ['gluteos', 0.4],
+    'Glute Kickback (Machine)': ['gluteos', 0.6],
     'Calf Extension (Machine)': ['gemelos', 2.2],
     'Seated Calf Raise': ['gemelos', 1.0],
     'Standing Calf Raise (Smith)': ['gemelos', 1.4],
+    'Standing Calf Raise (Machine)': ['gemelos', 1.4],
   };
   // Reglas para ejercicios que no están en la tabla (se evalúan en orden)
   const FALLBACK = [
+    [/press.*shoulder|shoulder.*press|OHP|press militar/i, 'hombros', 0.6],
+    [/deadlift|peso muerto/i, 'isquios', 1.4],
+    [/squat|sentadilla/i, 'cuadriceps', 1.2],
+    [/fly|apert[uo]ra/i, 'pecho', 0.25],
+    [/hip.*thrust|empuje.*cadera/i, 'gluteos', 1.5],
+    [/pull.?up|dominad/i, 'espalda', 1.3],
+    [/dip|fondos?/i, 'triceps', 0.9],
+    [/leg.*press|prensa/i, 'cuadriceps', 3.0],
+    [/leg.*extension|extensi[oó]n.*pierna/i, 'cuadriceps', 1.0],
+    [/adduct/i, 'aductores', 1.5],
+    [/glute|gl[uú]teo/i, 'gluteos', 0.8],
+    [/wrist|muñeca/i, 'antebrazo', 0.4],
+    [/abdom|plank|plancha/i, 'abdomen', 0.5],
     [/tr[ií]ceps/i, 'triceps', 0.6],
     [/leg curl/i, 'isquios', 0.6],
     [/curl/i, 'biceps', 0.3],
@@ -252,6 +289,20 @@ const Ranks = (() => {
     };
   }
 
-  return { TIERS, MUSCLES, LOWER, EX, ANCHORS, parseCSV, loadHevy, analyse, summary, e1rm, scoreFromRatio, ratioFromScore, tierIndex };
+  function formatDate(ts) {
+    const d = new Date(ts);
+    const m = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+    return d.getDate() + ' ' + m[d.getMonth()] + ' ' + d.getFullYear();
+  }
+
+  function exportSummary(result, bodyweight) {
+    const ms = {};
+    for (const [id, m] of Object.entries(result.muscles)) {
+      if (m) ms[id] = { score: Math.round(m.score * 10) / 10, tier: TIERS[m.tier].name };
+    }
+    return { date: Date.now(), bodyweight, global: Math.round(result.overall.score * 10) / 10, globalTier: TIERS[result.overall.tier].name, symmetry: result.symmetry, muscles: ms, sets: result.sets, exercises: result.exercises.length };
+  }
+
+  return { TIERS, MUSCLES, LOWER, EX, ANCHORS, parseCSV, loadHevy, analyse, summary, e1rm, scoreFromRatio, ratioFromScore, tierIndex, formatDate, exportSummary };
 })();
 if (typeof module !== 'undefined') module.exports = Ranks;
